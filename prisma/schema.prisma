@@ -1,0 +1,66 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Customer {
+  id      String  @id @default(cuid())
+  name    String
+  address String
+  phone   Int
+  glasses Glass[]
+
+  @@map("customers")
+}
+
+model Glass {
+  id            String         @id @default(cuid())
+  frame         String
+  lensType      String
+  left          String
+  right         String
+  price         Int
+  deposit       Int
+  orderDate     DateTime
+  deliveryDate  DateTime
+  paymentStatus PaymentStatus? @default(Unpaid)
+  paymentMethod PaymentMethod
+  Customer      Customer?      @relation(fields: [customerId], references: [id])
+  customerId    String?
+  installments  Installments[]
+
+  @@map("glasses")
+}
+
+model Installments {
+  id        String    @id @default(cuid())
+  paidDate  DateTime?
+  amount    Int
+  total     Int
+  remaining Int
+  Glass     Glass?    @relation(fields: [glassId], references: [id])
+  glassId   String?
+
+  @@map("installments")
+}
+
+enum PaymentStatus {
+  Paid
+  Unpaid
+}
+
+enum PaymentMethod {
+  Cash
+  Installments
+}
