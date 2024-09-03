@@ -360,6 +360,15 @@ app.post('/add-installment/:glassId', async (req, res) => {
 			glass.installments.length > 0
 				? glass.installments[glass.installments.length - 1].remaining
 				: glass.price;
+
+		// Check if the amount is greater than the previous remaining amount and maximum amount
+		if (amount > previousRemaining) {
+			return res.status(400).json({
+				error: true,
+				message: `Amount exceeds remaining balance. Maximum amount is ${previousRemaining}`,
+			});
+		}
+
 		const newRemaining = previousRemaining - amount;
 
 		// Create new installment
@@ -436,6 +445,22 @@ app.put('/edit-installment/:installmentId', async (req, res) => {
 				paidDate: 'asc',
 			},
 		});
+
+		// Calculate the total of all installments amount
+		const totalAmount = allInstallments.reduce((acc, inst) => acc + inst.amount, 0);
+
+		// Calculate the remaining amount
+		const remainingAmount = installment.Glass.price - totalAmount;
+
+		// Check if the amount is greater than the remaining amount and say maximum amount
+		if (amount > remainingAmount) {
+			return res.status(400).json({
+				error: true,
+				message: `Amount exceeds remaining balance. Maximum amount is ${remainingAmount}`,
+			});
+		}
+
+		//
 
 		// Find the index of the installment to be edited
 		const installmentIndex = allInstallments.findIndex((inst) => inst.id === installmentId);
