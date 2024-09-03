@@ -467,13 +467,21 @@ app.put('/edit-installment/:installmentId', async (req, res) => {
 			await prisma.installments.update({
 				where: { id: currentInstallment.id },
 				data: {
-					paidDate: currentInstallment.paidDate,
 					amount: currentInstallment.amount,
 					total: currentInstallment.total,
 					remaining: currentInstallment.remaining,
 				},
 			});
 		}
+
+		await prisma.installments.update({
+			where: {
+				id: installmentId,
+			},
+			data: {
+				paidDate: paidDate,
+			},
+		});
 
 		// Update payment status if the remaining amount is 0
 		if (remaining === 0) {
