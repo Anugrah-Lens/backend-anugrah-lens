@@ -16,12 +16,16 @@ app.use(cors());
 // Get all customers
 app.get('/customers', async (req, res) => {
 	try {
-		// Fetch all customers with their glasses and glasses' installments
+		// Fetch all customers with their glasses and glasses' installments AND sort by PAIDDATE
 		const customer = await prisma.customer.findMany({
 			include: {
 				glasses: {
 					include: {
-						installments: true,
+						installments: {
+							orderBy: {
+								paidDate: 'asc',
+							},
+						},
 					},
 				},
 			},
@@ -37,6 +41,75 @@ app.get('/customers', async (req, res) => {
 		res.status(500).json({ error: true, message: 'Internal server error' });
 	}
 });
+
+// get customer by id
+app.get('/customer/:id', async (req, res) => {
+	try {
+		const customerId = req.params.id;
+
+		// Fetch customer by id with their glasses and glasses' installments
+		const customer = await prisma.customer.findUnique({
+			where: {
+				id: customerId,
+			},
+			include: {
+				glasses: {
+					include: {
+						installments: {
+							orderBy: {
+								paidDate: 'asc',
+							},
+						},
+					},
+				},
+			},
+		});
+
+		if (!customer) {
+			return res.status(404).json({ error: true, message: 'Customer not found' });
+		}
+
+		res.json({
+			error: false,
+			message: 'Customer fetched successfully',
+			customer: customer,
+		});
+	} catch (error) {
+		console.error('Error fetching customer:', error);
+		res.status(500).json({ error: true, message: 'Internal server error' });
+	}
+});
+
+app.get('/customer/:id/glasses', async (req, res) => {
+	try {
+		const customerId = req.params.id;
+
+		// Fetch all glasses related to the customer with their installments
+		const glasses = await prisma.glass.findMany({
+			where: {
+				customerId: customerId,
+			},
+			include: {
+				installments: {
+					orderBy: {
+						paidDate: 'asc',
+					},
+				},
+			},
+		});
+
+		res.json({
+			error: false,
+			message: 'Glasses fetched successfully',
+			glasses: glasses,
+		});
+	} catch (error) {
+		console.error('Error fetching glasses:', error);
+		res.status(500).json({ error: true, message: 'Internal server error' });
+	}
+});
+
+// get glass by id
 
 // Create new customer with glasses
 app.post('/add-customer', async (req, res) => {
@@ -322,40 +395,27 @@ app.post('/add-installment/:glassId', async (req, res) => {
 			return res.status(400).json({ error: true, message: 'Amount is required' });
 		}
 
-		//if amount is less than 0 send message
+		// if amount is less than 0 send message
 		if (amount <= 0) {
 			return res.status(400).json({ error: true, message: 'Amount must be greater than 0' });
 		}
 
-		//if paidDate is null send message
+		// if paidDate is null send message
 		if (!paidDate) {
 			return res.status(400).json({ error: true, message: 'Paid date is required' });
 		}
 
 		// Fetch the glass and related installments
 		const glass = await prisma.glass.findUnique({
-			where: {
-				id: glassId,
-			},
+			where: { id: glassId },
 			include: {
 				installments: {
-					orderBy: {
-						paidDate: 'asc', // Ensure installments are ordered by paidDate
-					},
+					orderBy: { paidDate: 'asc' }, // Ensure installments are ordered by paidDate
 				},
 			},
 		});
 
-		// Calculate the total of previous installments
-		const previousTotal = glass.installments.reduce(
-			(acc, installment) => acc + installment.amount,
-			0
-		);
-
-		// Calculate the new total by adding the new amount
-		const newTotal = previousTotal + amount;
-
-		// Calculate the remaining amount
+		// Calculate the remaining amount from the last installment
 		const previousRemaining =
 			glass.installments.length > 0
 				? glass.installments[glass.installments.length - 1].remaining
@@ -369,18 +429,67 @@ app.post('/add-installment/:glassId', async (req, res) => {
 			});
 		}
 
-		const newRemaining = previousRemaining - amount;
+		// Insert the new installment and update remaining amounts for subsequent installments
+		let newTotal = 0;
+		let newRemaining = glass.price;
 
-		// Create new installment
-		const newInstallment = await prisma.installments.create({
-			data: {
-				paidDate: paidDate,
-				amount,
-				total: newTotal,
-				remaining: newRemaining,
-				glassId: glassId,
-			},
-		});
+		// Array to store installment updates
+		const updatedInstallments = [];
+
+		// Insert new installment at the correct position based on paidDate
+		const newInstallmentIndex = glass.installments.findIndex(
+			(inst) => new Date(inst.paidDate) > new Date(paidDate)
+		);
+
+		// Recalculate the totals and remaining for all installments including the new one
+		for (let i = 0; i <= glass.installments.length; i++) {
+			if (
+				i === newInstallmentIndex ||
+				(i === glass.installments.length && newInstallmentIndex === -1)
+			) {
+				// Insert the new installment
+				newTotal += amount;
+				newRemaining -= amount;
+
+				updatedInstallments.push({
+					paidDate,
+					amount,
+					total: newTotal,
+					remaining: newRemaining,
+					glassId,
+				});
+			}
+
+			if (i < glass.installments.length) {
+				// Update existing installment
+				const installment = glass.installments[i];
+				newTotal += installment.amount;
+				newRemaining -= installment.amount;
+
+				updatedInstallments.push({
+					...installment,
+					total: newTotal,
+					remaining: newRemaining,
+				});
+			}
+		}
+
+		// Save all updated installments including the new one
+		for (const installment of updatedInstallments) {
+			if (installment.id) {
+				await prisma.installments.update({
+					where: { id: installment.id },
+					data: {
+						total: installment.total,
+						remaining: installment.remaining,
+					},
+				});
+			} else {
+				await prisma.installments.create({
+					data: installment,
+				});
+			}
+		}
 
 		// Update payment status if the new remaining amount is 0
 		if (newRemaining === 0) {
@@ -393,7 +502,6 @@ app.post('/add-installment/:glassId', async (req, res) => {
 		res.json({
 			error: false,
 			message: 'Installment added successfully',
-			installment: newInstallment,
 		});
 	} catch (error) {
 		console.error('Error adding installment:', error);
