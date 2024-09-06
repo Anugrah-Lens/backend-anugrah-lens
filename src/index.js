@@ -129,22 +129,29 @@ app.post('/add-customer', async (req, res) => {
 			paymentMethod,
 		} = req.body;
 
-		//if null send message
-		if (
-			!name ||
-			!phone ||
-			!address ||
-			!frame ||
-			!lensType ||
-			!left ||
-			!right ||
-			!price ||
-			!deposit ||
-			!orderDate ||
-			!deliveryDate ||
-			!paymentMethod
-		) {
-			return res.status(400).json({ error: true, message: 'All fields are required' });
+		// Buat array untuk menyimpan pesan error
+		const missingFields = [];
+
+		// Cek setiap field
+		if (!name) missingFields.push('Name');
+		if (!phone) missingFields.push('Phone');
+		if (!address) missingFields.push('Address');
+		if (!frame) missingFields.push('Frame');
+		if (!lensType) missingFields.push('Lens Type');
+		if (!left) missingFields.push('Left Lens');
+		if (!right) missingFields.push('Right Lens');
+		if (!price) missingFields.push('Price');
+		if (!deposit) missingFields.push('Deposit');
+		if (!orderDate) missingFields.push('Order Date');
+		if (!deliveryDate) missingFields.push('Delivery Date');
+		if (!paymentMethod) missingFields.push('Payment Method');
+
+		// Jika ada field yang kosong, kirimkan pesan error
+		if (missingFields.length > 0) {
+			return res.status(400).json({
+				error: true,
+				message: `The following fields are missing: ${missingFields.join(', ')}`,
+			});
 		}
 
 		//if price is less than 0 send message
