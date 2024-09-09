@@ -18,7 +18,7 @@ model Customer {
   id      String  @id @default(cuid())
   name    String
   address String
-  phone   Int
+  phone   String
   glasses Glass[]
 
   @@map("customers")
