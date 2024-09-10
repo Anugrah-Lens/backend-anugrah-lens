@@ -11,7 +11,12 @@ dotenv.config();
 // Middlewares
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(cors());
+app.use(
+	cors({
+		origin: '*', //
+		credentials: false,
+	})
+);
 
 // Get all customers
 app.get('/customers', async (req, res) => {
