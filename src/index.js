@@ -199,7 +199,7 @@ app.post('/add-customer', async (req, res) => {
 			orderDate,
 			deliveryDate,
 			paymentMethod,
-			paymentStatus: paymentMethod === 'Installments' ? 'Unpaid' : 'Paid',
+			paymentStatus: deposit === price ? 'Paid' : 'Unpaid',
 		};
 
 		// Create the first installment regardless of payment method
@@ -248,15 +248,6 @@ app.post('/add-customer', async (req, res) => {
 				},
 				data: {
 					paymentStatus: 'Paid',
-				},
-			});
-		} else {
-			await prisma.glass.update({
-				where: {
-					id: newCustomer.glasses[0].id,
-				},
-				data: {
-					paymentStatus: 'Unpaid',
 				},
 			});
 		}
