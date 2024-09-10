@@ -1,6 +1,6 @@
 const dotenv = require('dotenv');
 const express = require('express');
-const { PrismaClient } = require('@prisma/client');
+const { PrismaClient, PaymentMethod } = require('@prisma/client');
 const prisma = new PrismaClient();
 const app = express();
 const PORT = process.env.PORT;
@@ -108,8 +108,6 @@ app.get('/customer/:id/glasses', async (req, res) => {
 		res.status(500).json({ error: true, message: 'Internal server error' });
 	}
 });
-
-// get glass by id
 
 // Create new customer with glasses
 app.post('/add-customer', async (req, res) => {
@@ -230,7 +228,7 @@ app.post('/add-customer', async (req, res) => {
 			});
 		}
 
-		// Create new customer with a glass if customer doesn't exist
+		// Create new customer with a glass if customer doesn't exist and if deposit is same as price set payment status to Paid
 		const newCustomer = await prisma.customer.create({
 			data: {
 				name,
@@ -241,6 +239,27 @@ app.post('/add-customer', async (req, res) => {
 				},
 			},
 		});
+
+		// after creating customer, if deposit is same as price set payment status to Paid
+		if (price === deposit) {
+			await prisma.glass.update({
+				where: {
+					id: newCustomer.glasses[0].id,
+				},
+				data: {
+					paymentStatus: 'Paid',
+				},
+			});
+		} else {
+			await prisma.glass.update({
+				where: {
+					id: newCustomer.glasses[0].id,
+				},
+				data: {
+					paymentStatus: 'Unpaid',
+				},
+			});
+		}
 
 		res.json({
 			error: false,
@@ -273,7 +292,8 @@ app.put('/edit-customer/:id/:glassId', async (req, res) => {
 			paymentMethod,
 			paymentStatus,
 		} = req.body;
-		//if null send message
+
+		// Validate required fields
 		if (
 			!name ||
 			!phone ||
@@ -291,40 +311,34 @@ app.put('/edit-customer/:id/:glassId', async (req, res) => {
 			return res.status(400).json({ error: true, message: 'All fields are required' });
 		}
 
-		//if price is less than 0 send message
+		// Validate price and deposit
 		if (price <= 0) {
 			return res.status(400).json({ error: true, message: 'Price must be greater than 0' });
 		}
-
-		//if deposit is less than 0 send message
 		if (deposit <= 0) {
 			return res.status(400).json({ error: true, message: 'Deposit must be greater than 0' });
 		}
-
-		//if deposit is greater than price send message
 		if (deposit > price) {
 			return res.status(400).json({ error: true, message: 'Deposit must be less than price' });
 		}
 
-		//if orderDate is greater than deliveryDate send message
+		// Validate dates
 		if (orderDate > deliveryDate) {
 			return res
 				.status(400)
 				.json({ error: true, message: 'Order date must be less than delivery date' });
 		}
 
-		//if paymentMethod is not Installments or Full send message
+		// Validate payment method
 		if (paymentMethod !== 'Installments' && paymentMethod !== 'Cash') {
 			return res
 				.status(400)
 				.json({ error: true, message: 'Payment method must be Installments or Cash' });
 		}
 
-		// Update customer details based on customerId
+		// Update customer details
 		const updatedCustomer = await prisma.customer.update({
-			where: {
-				id: customerId,
-			},
+			where: { id: customerId },
 			data: {
 				name,
 				phone,
@@ -332,11 +346,9 @@ app.put('/edit-customer/:id/:glassId', async (req, res) => {
 			},
 		});
 
-		// Update glass details based on glassId
+		// Update glass details
 		const updatedGlass = await prisma.glass.update({
-			where: {
-				id: glassId,
-			},
+			where: { id: glassId },
 			data: {
 				frame,
 				lensType,
@@ -351,32 +363,54 @@ app.put('/edit-customer/:id/:glassId', async (req, res) => {
 			},
 		});
 
-		// Update installments if payment method is Installments
-		if (paymentMethod === 'Installments') {
-			// Fetch installments related to the glass and sort by paidDate
-			const existingInstallments = await prisma.installments.findMany({
-				where: {
-					glassId: glassId,
-				},
-				orderBy: {
-					paidDate: 'asc', // Sorting by paidDate to get the earliest payment first
-				},
+		// Handle installment updates if payment method is Installments
+		if (paymentMethod === 'Installments' || PaymentMethod === 'Cash') {
+			// Fetch all installments related to the glass order, ordered by paidDate
+			const allInstallments = await prisma.installments.findMany({
+				where: { glassId: glassId },
+				orderBy: { paidDate: 'asc' },
 			});
 
-			// Update the first installment with the deposit amount (the earliest paidDate)
-			if (existingInstallments.length > 0) {
+			let previousTotal = 0;
+			let remaining = price;
+
+			// Iterate through installments to update amounts and totals
+			for (let i = 0; i < allInstallments.length; i++) {
+				const currentInstallment = allInstallments[i];
+
+				if (i === 0) {
+					// Update the first installment with the deposit amount
+					currentInstallment.amount = deposit;
+				}
+
+				previousTotal += currentInstallment.amount;
+				remaining -= currentInstallment.amount;
+
+				currentInstallment.total = previousTotal;
+				currentInstallment.remaining = remaining;
+
+				// Save the updated installment
 				await prisma.installments.update({
-					where: {
-						id: existingInstallments[0].id,
-					},
+					where: { id: currentInstallment.id },
 					data: {
-						paidDate: new Date(), // Set to the current date as the first payment date
-						amount: deposit, // Deposit amount is considered the first payment
-						total: deposit,
-						remaining: price - deposit,
+						amount: currentInstallment.amount,
+						total: currentInstallment.total,
+						remaining: currentInstallment.remaining,
 					},
 				});
 			}
+
+			// Update payment status if fully paid
+			if (remaining === 0) {
+				await prisma.glass.update({
+					where: { id: glassId },
+					data: { paymentStatus: 'Paid' },
+				});
+			} else
+				await prisma.glass.update({
+					where: { id: glassId },
+					data: { paymentStatus: 'Unpaid' },
+				});
 		}
 
 		res.json({
@@ -421,6 +455,20 @@ app.post('/add-installment/:glassId', async (req, res) => {
 				},
 			},
 		});
+
+		// Check if there are existing installments
+		if (glass.installments.length > 0) {
+			// Get the first installment's paidDate
+			const firstInstallmentDate = new Date(glass.installments[0].paidDate);
+
+			// Check if the new paidDate is before the first installment's paidDate
+			if (new Date(paidDate) < firstInstallmentDate) {
+				return res.status(400).json({
+					error: true,
+					message: 'Installment cannot be added before the first installment date',
+				});
+			}
+		}
 
 		// Calculate the remaining amount from the last installment
 		const previousRemaining =
@@ -504,6 +552,11 @@ app.post('/add-installment/:glassId', async (req, res) => {
 				where: { id: glassId },
 				data: { paymentStatus: 'Paid' },
 			});
+		} else {
+			await prisma.glass.update({
+				where: { id: glassId },
+				data: { paymentStatus: 'Unpaid' },
+			});
 		}
 
 		res.json({
@@ -527,24 +580,20 @@ app.put('/edit-installment/:installmentId', async (req, res) => {
 			return res.status(400).json({ error: true, message: 'Amount is required' });
 		}
 
-		//if amount is less than 0 send message
+		// if amount is less than 0 send message
 		if (amount <= 0) {
 			return res.status(400).json({ error: true, message: 'Amount must be greater than 0' });
 		}
 
-		//if paidDate is null send message
+		// if paidDate is null send message
 		if (!paidDate) {
 			return res.status(400).json({ error: true, message: 'Paid date is required' });
 		}
 
 		// Fetch the installment to be edited and its glass
 		const installment = await prisma.installments.findUnique({
-			where: {
-				id: installmentId,
-			},
-			include: {
-				Glass: true,
-			},
+			where: { id: installmentId },
+			include: { Glass: true },
 		});
 
 		if (!installment) {
@@ -553,21 +602,27 @@ app.put('/edit-installment/:installmentId', async (req, res) => {
 
 		// Fetch all installments related to the same Glass order, ordered by paidDate
 		const allInstallments = await prisma.installments.findMany({
-			where: {
-				glassId: installment.glassId,
-			},
-			orderBy: {
-				paidDate: 'asc',
-			},
+			where: { glassId: installment.glassId },
+			orderBy: { paidDate: 'asc' },
 		});
 
-		// Calculate the total of all installments amount
-		const totalAmount = allInstallments.reduce((acc, inst) => acc + inst.amount, 0);
+		// Ensure the new paidDate is not before the first installment's paidDate
+		if (new Date(paidDate) < new Date(allInstallments[0].paidDate)) {
+			return res.status(400).json({
+				error: true,
+				message: 'Paid date cannot be earlier than the first installment date',
+			});
+		}
+
+		// Calculate the total of all installments amount excluding the current one
+		const totalAmountExcludingCurrent = allInstallments
+			.filter((inst) => inst.id !== installmentId)
+			.reduce((acc, inst) => acc + inst.amount, 0);
 
 		// Calculate the remaining amount
-		const remainingAmount = installment.Glass.price - totalAmount;
+		const remainingAmount = installment.Glass.price - totalAmountExcludingCurrent;
 
-		// Check if the amount is greater than the remaining amount and say maximum amount
+		// Check if the amount is greater than the remaining amount
 		if (amount > remainingAmount) {
 			return res.status(400).json({
 				error: true,
@@ -575,23 +630,14 @@ app.put('/edit-installment/:installmentId', async (req, res) => {
 			});
 		}
 
-		//
-
 		// Find the index of the installment to be edited
 		const installmentIndex = allInstallments.findIndex((inst) => inst.id === installmentId);
 
-		// Update the amount for the installment to be edited
+		// Update the amount and paidDate for the installment to be edited
 		allInstallments[installmentIndex].amount = amount;
+		allInstallments[installmentIndex].paidDate = paidDate;
 
-		// Check if this is the only installment or the earliest installment
-		if (allInstallments.length === 1 || installmentIndex === 0) {
-			await prisma.glass.update({
-				where: { id: installment.glassId },
-				data: { deposit: amount },
-			});
-		}
-
-		// Recalculate the totals and remainings
+		// Recalculate the totals and remaining amounts
 		let previousTotal = 0;
 		let remaining = installment.Glass.price;
 
@@ -610,18 +656,18 @@ app.put('/edit-installment/:installmentId', async (req, res) => {
 					amount: currentInstallment.amount,
 					total: currentInstallment.total,
 					remaining: currentInstallment.remaining,
+					paidDate: currentInstallment.paidDate,
 				},
 			});
 		}
 
-		await prisma.installments.update({
-			where: {
-				id: installmentId,
-			},
-			data: {
-				paidDate: paidDate,
-			},
-		});
+		// Update deposit if this is the only installment or the earliest installment
+		if (installmentIndex === 0) {
+			await prisma.glass.update({
+				where: { id: installment.glassId },
+				data: { deposit: amount },
+			});
+		}
 
 		// Update payment status if the remaining amount is 0
 		if (remaining === 0) {
@@ -629,7 +675,11 @@ app.put('/edit-installment/:installmentId', async (req, res) => {
 				where: { id: installment.glassId },
 				data: { paymentStatus: 'Paid' },
 			});
-		}
+		} else
+			await prisma.glass.update({
+				where: { id: installment.glassId },
+				data: { paymentStatus: 'Unpaid' },
+			});
 
 		res.json({
 			error: false,
