@@ -137,7 +137,6 @@ app.post('/add-customer', async (req, res) => {
 
 		// Cek setiap field
 		if (!name) missingFields.push('Name');
-		if (!phone) missingFields.push('Phone');
 		if (!address) missingFields.push('Address');
 		if (!frame) missingFields.push('Frame');
 		if (!lensType) missingFields.push('Lens Type');
@@ -292,7 +291,6 @@ app.put('/edit-customer/:id/:glassId', async (req, res) => {
 		// Validate required fields
 		if (
 			!name ||
-			!phone ||
 			!address ||
 			!frame ||
 			!lensType ||
