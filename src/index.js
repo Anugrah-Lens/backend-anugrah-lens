@@ -143,7 +143,6 @@ app.post('/add-customer', async (req, res) => {
 		if (!left) missingFields.push('Left Lens');
 		if (!right) missingFields.push('Right Lens');
 		if (!price) missingFields.push('Price');
-		if (!deposit) missingFields.push('Deposit');
 		if (!orderDate) missingFields.push('Order Date');
 		if (!deliveryDate) missingFields.push('Delivery Date');
 		if (!paymentMethod) missingFields.push('Payment Method');
