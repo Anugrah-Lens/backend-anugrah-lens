@@ -421,6 +421,52 @@ app.put('/edit-customer/:id/:glassId', async (req, res) => {
 	}
 });
 
+// Delete customer all data by id
+app.delete('/delete-customer/:id', async (req, res) => {
+	try {
+		const customerId = req.params.id;
+
+		// Fetch the customer and related glasses
+		const customer = await prisma.customer.findUnique({
+			where: { id: customerId },
+			include: { glasses: true },
+		});
+
+		if (!customer) {
+			return res.status(404).json({ error: true, message: 'Customer not found' });
+		}
+
+		// Delete all installments related to the glasses
+		await prisma.installments.deleteMany({
+			where: {
+				glassId: {
+					in: customer.glasses.map((glass) => glass.id),
+				},
+			},
+		});
+
+		// Delete all glasses related to the customer
+		await prisma.glass.deleteMany({
+			where: {
+				customerId: customerId,
+			},
+		});
+
+		// Delete the customer
+		await prisma.customer.delete({
+			where: { id: customerId },
+		});
+
+		res.json({
+			error: false,
+			message: 'Customer and related data deleted successfully',
+		});
+	} catch (error) {
+		console.error('Error deleting customer:', error);
+		res.status(500).json({ error: true, message: 'Internal server error' });
+	}
+});
+
 // add installment
 app.post('/add-installment/:glassId', async (req, res) => {
 	try {
