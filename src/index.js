@@ -162,7 +162,7 @@ app.post('/add-customer', async (req, res) => {
 		}
 
 		//if deposit is less than 0 send message
-		if (deposit <= 0) {
+		if (deposit < 0) {
 			return res.status(400).json({ error: true, message: 'Deposit must be greater than 0' });
 		}
 
@@ -309,7 +309,7 @@ app.put('/edit-customer/:id/:glassId', async (req, res) => {
 		if (price <= 0) {
 			return res.status(400).json({ error: true, message: 'Price must be greater than 0' });
 		}
-		if (deposit <= 0) {
+		if (deposit < 0) {
 			return res.status(400).json({ error: true, message: 'Deposit must be greater than 0' });
 		}
 		if (deposit > price) {
