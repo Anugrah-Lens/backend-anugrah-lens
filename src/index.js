@@ -210,7 +210,7 @@ app.post('/add-customer', async (req, res) => {
 		// Create the first installment regardless of payment method
 		glassData.installments = {
 			create: {
-				paidDate: new Date(), // Set to the current date as the first payment date
+				paidDate: orderDate, // Set to the current date as the first payment date
 				amount: deposit, // Deposit amount is considered the first payment
 				total: deposit,
 				remaining: price - deposit,
