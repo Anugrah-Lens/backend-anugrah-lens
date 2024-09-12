@@ -151,37 +151,39 @@ app.post('/add-customer', async (req, res) => {
 		if (missingFields.length > 0) {
 			return res.status(400).json({
 				error: true,
-				message: `The following fields are missing: ${missingFields.join(', ')}`,
+				message: `Kolom berikut harus diisi: ${missingFields.join(', ')}`,
 			});
 		}
 
 		//if price is less than 0 send message
 		if (price <= 0) {
-			return res.status(400).json({ error: true, message: 'Price must be greater than 0' });
+			return res.status(400).json({ error: true, message: 'Harga harus lebih besar dari 0' });
 		}
 
 		//if deposit is less than 0 send message
 		if (deposit < 0) {
-			return res.status(400).json({ error: true, message: 'Deposit must be greater than 0' });
+			return res.status(400).json({ error: true, message: 'Deposit harus lebih besar dari 0' });
 		}
 
 		//if deposit is greater than price send message
 		if (deposit > price) {
-			return res.status(400).json({ error: true, message: 'Deposit must be less than price' });
+			// buat dalam bahasa indo
+			return res.status(400).json({ error: true, message: 'Deposit harus lebih kecil dari harga' });
 		}
 
 		//if orderDate is greater than deliveryDate send message
 		if (orderDate > deliveryDate) {
 			return res
 				.status(400)
-				.json({ error: true, message: 'Order date must be less than delivery date' });
+
+				.json({ error: true, message: 'Tanggal order harus lebih kecil dari tanggal pengiriman' });
 		}
 
 		//if paymentMethod is not Installments or Full send message
 		if (paymentMethod !== 'Installments' && paymentMethod !== 'Cash') {
 			return res
 				.status(400)
-				.json({ error: true, message: 'Payment method must be Installments or Cash' });
+				.json({ error: true, message: 'Metode pembayaran harus Installments atau Cash' });
 		}
 
 		// Check if customer already exists
@@ -306,13 +308,13 @@ app.put('/edit-customer/:id/:glassId', async (req, res) => {
 
 		// Validate price and deposit
 		if (price <= 0) {
-			return res.status(400).json({ error: true, message: 'Price must be greater than 0' });
+			return res.status(400).json({ error: true, message: 'Harga harus lebih besar dari 0' });
 		}
 		if (deposit < 0) {
-			return res.status(400).json({ error: true, message: 'Deposit must be greater than 0' });
+			return res.status(400).json({ error: true, message: 'Deposit harus lebih besar dari 0' });
 		}
 		if (deposit > price) {
-			return res.status(400).json({ error: true, message: 'Deposit must be less than price' });
+			return res.status(400).json({ error: true, message: 'Deposit harus lebih kecil dari harga' });
 		}
 
 		// Validate dates
@@ -326,7 +328,7 @@ app.put('/edit-customer/:id/:glassId', async (req, res) => {
 		if (paymentMethod !== 'Installments' && paymentMethod !== 'Cash') {
 			return res
 				.status(400)
-				.json({ error: true, message: 'Payment method must be Installments or Cash' });
+				.json({ error: true, message: 'Metode pembayaran harus Installments atau Cash' });
 		}
 
 		// Update customer details
@@ -430,7 +432,7 @@ app.delete('/delete-customer/:id', async (req, res) => {
 		});
 
 		if (!customer) {
-			return res.status(404).json({ error: true, message: 'Customer not found' });
+			return res.status(404).json({ error: true, message: 'Pelanggan tidak ditemukan' });
 		}
 
 		// Delete all installments related to the glasses
@@ -472,17 +474,17 @@ app.post('/add-installment/:glassId', async (req, res) => {
 
 		// if amount is null send message
 		if (!amount) {
-			return res.status(400).json({ error: true, message: 'Amount is required' });
+			return res.status(400).json({ error: true, message: 'Jumlah harus diisi' });
 		}
 
 		// if amount is less than 0 send message
 		if (amount <= 0) {
-			return res.status(400).json({ error: true, message: 'Amount must be greater than 0' });
+			return res.status(400).json({ error: true, message: 'Jumlah harus lebih besar dari 0' });
 		}
 
 		// if paidDate is null send message
 		if (!paidDate) {
-			return res.status(400).json({ error: true, message: 'Paid date is required' });
+			return res.status(400).json({ error: true, message: 'Tanggal pembayaran harus diisi' });
 		}
 
 		// Fetch the glass and related installments
@@ -504,7 +506,7 @@ app.post('/add-installment/:glassId', async (req, res) => {
 			if (new Date(paidDate) < firstInstallmentDate) {
 				return res.status(400).json({
 					error: true,
-					message: 'Installment cannot be added before the first installment date',
+					message: 'Angsuran tidak dapat ditambahkan sebelum tanggal angsuran pertama',
 				});
 			}
 		}
@@ -519,7 +521,7 @@ app.post('/add-installment/:glassId', async (req, res) => {
 		if (amount > previousRemaining) {
 			return res.status(400).json({
 				error: true,
-				message: `Amount exceeds remaining balance. Maximum amount is ${previousRemaining}`,
+				message: `Jumlah melebihi sisa pembayaran yang tersisa. Jumlah maksimum adalah ${previousRemaining}`,
 			});
 		}
 
@@ -616,17 +618,17 @@ app.put('/edit-installment/:installmentId', async (req, res) => {
 
 		// if amount is null send message
 		if (!amount) {
-			return res.status(400).json({ error: true, message: 'Amount is required' });
+			return res.status(400).json({ error: true, message: 'Jumlah harus diisi' });
 		}
 
 		// if amount is less than 0 send message
 		if (amount <= 0) {
-			return res.status(400).json({ error: true, message: 'Amount must be greater than 0' });
+			return res.status(400).json({ error: true, message: 'Jumlah harus lebih besar dari 0' });
 		}
 
 		// if paidDate is null send message
 		if (!paidDate) {
-			return res.status(400).json({ error: true, message: 'Paid date is required' });
+			return res.status(400).json({ error: true, message: 'Tanggal pembayaran harus diisi' });
 		}
 
 		// Fetch the installment to be edited and its glass
@@ -636,7 +638,7 @@ app.put('/edit-installment/:installmentId', async (req, res) => {
 		});
 
 		if (!installment) {
-			return res.status(404).json({ error: true, message: 'Installment not found' });
+			return res.status(404).json({ error: true, message: 'Angsuran tidak ditemukan' });
 		}
 
 		// Fetch all installments related to the same Glass order, ordered by paidDate
@@ -649,7 +651,7 @@ app.put('/edit-installment/:installmentId', async (req, res) => {
 		if (new Date(paidDate) < new Date(allInstallments[0].paidDate)) {
 			return res.status(400).json({
 				error: true,
-				message: 'Paid date cannot be earlier than the first installment date',
+				message: 'Tanggal pembayaran tidak dapat lebih awal dari tanggal angsuran pertama',
 			});
 		}
 
@@ -665,7 +667,7 @@ app.put('/edit-installment/:installmentId', async (req, res) => {
 		if (amount > remainingAmount) {
 			return res.status(400).json({
 				error: true,
-				message: `Amount exceeds remaining balance. Maximum amount is ${remainingAmount}`,
+				message: `Jumlah melebihi sisa pembayaran. Jumlah maksimum adalah ${remainingAmount}`,
 			});
 		}
 
